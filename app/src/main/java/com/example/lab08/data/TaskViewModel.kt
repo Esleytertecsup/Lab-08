@@ -1,53 +1,212 @@
+
 package com.example.lab08.data
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 
+
+
+import androidx.lifecycle.viewModelScope
+
+
+
+import kotlinx.coroutines.flow.MutableStateFlow
+
+
+
+import kotlinx.coroutines.flow.SharingStarted
+
+
+
+import kotlinx.coroutines.flow.StateFlow
+
+
+
+import kotlinx.coroutines.flow.combine
+
+
+
+import kotlinx.coroutines.flow.flatMapLatest
+
+
+
+import kotlinx.coroutines.flow.onEach
+
+
+
+import kotlinx.coroutines.flow.stateIn
+
+
+
+import kotlinx.coroutines.launch
 
 class TaskViewModel(private val dao: TaskDao) : ViewModel() {
 
 
-    // Estado para la lista de tareas
-    private val _tasks = MutableStateFlow<List<Task>>(emptyList())
-    val tasks: StateFlow<List<Task>> = _tasks
+
+    private val _filterType = MutableStateFlow(FilterType.ALL)
+
+    private val _searchQuery = MutableStateFlow("")
 
 
-    init {
-        // Al inicializar, cargamos las tareas de la base de datos
-        viewModelScope.launch {
-            _tasks.value = dao.getAllTasks()
+
+    private val _filteredTasks = combine(_filterType, _searchQuery) { filterType, query ->
+
+        Pair(filterType, query)
+
+    }.flatMapLatest { (filterType, query) ->
+
+        when (filterType) {
+
+            FilterType.ALL -> {
+
+                if (query.isEmpty()) {
+
+                    dao.getAllTasks()
+
+                } else {
+
+                    dao.searchTasks(query)
+
+                }
+
+            }
+
+            FilterType.COMPLETED -> {
+
+                if (query.isEmpty()) {
+
+                    dao.getTasksByCompletionStatus(true)
+
+                } else {
+
+                    dao.searchTasks(query).onEach { it.filter { task -> task.isCompleted } }
+
+                }
+
+            }
+
+            FilterType.PENDING -> {
+
+                if (query.isEmpty()) {
+
+                    dao.getTasksByCompletionStatus(false)
+
+                } else {
+
+                    dao.searchTasks(query).onEach { it.filter { task -> !task.isCompleted } }
+
+                }
+
+            }
+
         }
+
     }
 
 
-    // Función para añadir una nueva tarea
+
+    val tasks: StateFlow<List<Task>> = _filteredTasks.stateIn(
+
+        viewModelScope,
+
+        SharingStarted.WhileSubscribed(5000),
+
+        emptyList()
+
+    )
+
+
+
     fun addTask(description: String) {
+
         val newTask = Task(description = description)
+
         viewModelScope.launch {
+
             dao.insertTask(newTask)
-            _tasks.value = dao.getAllTasks() // Recargamos la lista
+
         }
+
     }
 
 
-    // Función para alternar el estado de completado de una tarea
+
     fun toggleTaskCompletion(task: Task) {
+
         viewModelScope.launch {
+
             val updatedTask = task.copy(isCompleted = !task.isCompleted)
+
             dao.updateTask(updatedTask)
-            _tasks.value = dao.getAllTasks() // Recargamos la lista
+
         }
+
     }
 
 
-    // Función para eliminar todas las tareas
-    fun deleteAllTasks() {
+
+    fun deleteTask(task: Task) {
+
         viewModelScope.launch {
-            dao.deleteAllTasks()
-            _tasks.value = emptyList() // Vaciamos la lista en el estado
+
+            dao.deleteTask(task)
+
         }
+
     }
+
+
+
+    fun deleteAllTasks() {
+
+        viewModelScope.launch {
+
+            dao.deleteAllTasks()
+
+        }
+
+    }
+
+
+
+    fun editTask(task: Task, newDescription: String) {
+
+        viewModelScope.launch {
+
+            val updatedTask = task.copy(description = newDescription)
+
+            dao.updateTask(updatedTask)
+
+        }
+
+    }
+
+
+
+    fun setFilter(filterType: FilterType) {
+
+        _filterType.value = filterType
+
+    }
+
+
+
+    fun setSearchQuery(query: String) {
+
+        _searchQuery.value = query
+
+    }
+
+
+
+    enum class FilterType {
+
+        ALL,
+
+        COMPLETED,
+
+        PENDING
+
+    }
+
 }

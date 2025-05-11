@@ -1,22 +1,55 @@
 package com.example.lab08.data
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.Query
-import androidx.room.Update
+import androidx.room.*
+
+
+
+import kotlinx.coroutines.flow.Flow
 
 @Dao
+
+
+
 interface TaskDao {
-    // Obtener todas las tareas
+
     @Query("SELECT * FROM tasks")
-    suspend fun getAllTasks(): List<Task>
-    // Insertar una nueva tarea
+
+    fun getAllTasks(): Flow<List<Task>>
+
+
+
+    @Query("SELECT * FROM tasks WHERE is_completed = :isCompleted")
+
+    fun getTasksByCompletionStatus(isCompleted: Boolean): Flow<List<Task>>
+
+
+
+    @Query("SELECT * FROM tasks WHERE description LIKE '%' || :query || '%'")
+
+    fun searchTasks(query: String): Flow<List<Task>>
+
+
+
     @Insert
+
     suspend fun insertTask(task: Task)
-    // Marcar una tarea como completada o no completada
+
+
+
     @Update
+
     suspend fun updateTask(task: Task)
-    // Eliminar todas las tareas
+
+
+
+    @Delete
+
+    suspend fun deleteTask(task: Task)
+
+
+
     @Query("DELETE FROM tasks")
+
     suspend fun deleteAllTasks()
+
 }
